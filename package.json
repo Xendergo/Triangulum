@@ -1,0 +1,14 @@
+{
+    "name": "triangulum",
+    "version": "1.0.0",
+    "description": "A lightweight reactive typescript API that makes the transfer of data as easy as possible",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "Xendergo",
+    "license": "LGPL-2.1",
+    "devDependencies": {
+        "typescript": "^4.3.5"
+    }
+}
