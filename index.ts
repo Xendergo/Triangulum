@@ -1,5 +1,9 @@
 import type { Registry } from "./registry"
 
+export * from "./registry"
+export * from "./defaultStrategies"
+export * from "./inputFields"
+
 /**
  * A class representing a class that can be sent via websockets
  * The `channel` field doesn't have to be overriden since the {@link MakeSendable} or {@link MakeNbtSendable} decorator will do that for you

@@ -1,4 +1,4 @@
-import type { Sendable } from "./sendableTypesHelpers"
+import type { Sendable } from "."
 
 export class Registry<
     T extends Sendable,
