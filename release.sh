@@ -1,5 +1,6 @@
+rm -rf release
 npm run build
 
 npm publish --dry-run
-read "Is this good?"
+read -p "Is this good?"
 npm publish
