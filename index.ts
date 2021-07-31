@@ -99,7 +99,9 @@ export abstract class AbstractListenerManager<
     TransferringType extends Sendable,
     IntermediateType,
     IOType,
-    TypeCheckingLayers extends Array<(data: any) => boolean>,
+    TypeCheckingLayers extends Array<(data: any) => boolean> = [
+        (data: any) => boolean
+    ],
     CustomData = undefined
 > implements ListenerManager<TransferringType>
 {

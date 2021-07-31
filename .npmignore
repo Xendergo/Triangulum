@@ -1,0 +1,4 @@
+*.prettierrc
+*test-project
+*.ts
+*.md

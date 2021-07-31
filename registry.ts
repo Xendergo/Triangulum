@@ -2,7 +2,9 @@ import type { Sendable } from "."
 
 export class Registry<
     T extends Sendable,
-    TypeCheckingLayers extends Array<(data: any) => boolean>,
+    TypeCheckingLayers extends Array<(data: any) => boolean> = [
+        (data: any) => boolean
+    ],
     CustomData = undefined
 > {
     entries: Map<
