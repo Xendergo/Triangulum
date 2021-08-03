@@ -1,4 +1,3 @@
-rm -rf release
 npm run build
 
 npm publish --dry-run

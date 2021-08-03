@@ -1,4 +1,4 @@
-import type { Sendable } from "."
+import type { Sendable } from "./index"
 
 export class Registry<
     T extends Sendable,

@@ -74,97 +74,28 @@ export interface ListenerManager<TransferringType extends Sendable> {
 }
 
 /**
- * A class to provide the common implementation details for classes managing communication using this API
+ * Implements common implementation details of a {@link ListenerManager}
  *
- * HOW TO IMPLEMENT:
- * You must call `this.onData` whenever the implementor received data from the other end of the connection
- *
- * You must call `this.ready` when the connection becomes open and you're ready to transmit data
- *
- * `encode` & `decode` only need to faithfully encode and decode the data given to it, everything else is handled by the ListenerManager class.
- * For example, if the `IOType` is json encoded text, just using `JSON.parse` & `JSON.stringify` would work just fine
- *
- * `finalize` is passed in the type checkers, and is responsible for type checking the data given to it wherever it needs to.
- * It must also faithfully convert the `IntermediateType` to the `TransferringType`.
- * Prototype changes are handled automatically
- * For example, if the IOType is JSON encoded text, and the IntermediateType is the return value of JSON.parse, then simply running the type checkers, throwing an error if they fail, and returning the same value is good enough.
- *
- * @typeParam `TransferringType` The data type that users of the implementing manager would receive and send
- * @typeParam `IntermediateType` The type that `decode` will decode to, and that `finalize` will convert from.
- * This is useful for being able to get a channel out of data, without decoding the data to it's final state.
- * That's useful for type checking data to make sure it *can* be decoded to it's final state before it is.
- * @typeParam `IOType` The data type that this manager converts `TransferringType` to and from, and is what's sent over the network
+ * If you're implementing {@link ListenerManager} directly, it may be helpful to extend this class
  */
-export abstract class AbstractListenerManager<
+export abstract class ListenerManagerImplementations<
     TransferringType extends Sendable,
-    IntermediateType,
-    IOType,
     TypeCheckingLayers extends Array<(data: any) => boolean> = [
         (data: any) => boolean
     ],
     CustomData = undefined
-> implements ListenerManager<TransferringType>
-{
+> {
     constructor(
         registry: Registry<TransferringType, TypeCheckingLayers, CustomData>
     ) {
         this.registry = registry
     }
 
-    /**
-     * Implementors must call this function when they receive data from the other end of the network
-     * @param data The data received
-     */
-    protected onData(data: IOType) {
-        let intermediate: IntermediateType
-        let channel: any
-
-        try {
-            ;[channel, intermediate] = this.decode(data)
-        } catch (e) {
-            console.warn(
-                `Dropped message because decoder threw an error: \n ${e} \n\n ${data}`
-            )
-            return
-        }
-
-        if (!(typeof channel === "string")) {
-            console.warn(
-                `Dropped message since \`channel\` is not a string: \n ${intermediate} \n\n ${data}`
-            )
-
-            return
-        }
-
-        if (!this.registry.entries.has(channel)) {
-            console.warn(
-                `Dropped message because it's channel (${channel}) isn't included in the registry (did you remember to use @MakeSendable on it?): \n ${intermediate} \n\n ${data}`
-            )
-
-            return
-        }
-
-        const [classType, strats, customData] =
-            this.registry.entries.get(channel)!
-
-        let decoded: TransferringType
-
-        try {
-            decoded = this.finalize(intermediate, strats, customData)
-        } catch (e) {
-            console.warn(
-                `Dropped message because converting to the TransferringType failed: ${e}: \n ${intermediate} \n\n ${data}`
-            )
-
-            return
-        }
-
-        Object.setPrototypeOf(intermediate, classType.prototype)
-
+    protected notifyListeners(data: TransferringType) {
         for (let i = 0; i < this.awaiters.length; i++) {
             const awaiter = this.awaiters[i]
-            if (awaiter.channel === channel && awaiter.predicate(decoded)) {
-                awaiter.resolve(decoded)
+            if (awaiter.channel === data.channel && awaiter.predicate(data)) {
+                awaiter.resolve(data)
 
                 this.awaiters.splice(i, 1)
 
@@ -172,7 +103,7 @@ export abstract class AbstractListenerManager<
             }
         }
 
-        this.listeners.get(channel)?.forEach(callback => callback(decoded))
+        this.listeners.get(data.channel!)?.forEach(callback => callback(data))
     }
 
     /**
@@ -210,6 +141,142 @@ export abstract class AbstractListenerManager<
     }
 
     /**
+     * Returns a promise that gets resolved when message of the expected class gets received, allowing you to await messages from the other side of the connection
+     *
+     * Only one awaiter can receive a message
+     * The priority of who gets what is decided by who called awaitMessage first
+     * A message can't trigger listeners if it's captured by a call of awaitMessage
+     *
+     * @param channelClass The class representing the data you want to await
+     * @param predicate Decides whether you want the promise to get resolved for the given channelClass
+     * @returns A promise that gets resolved when a message comes in that matches the channelClass and predicate
+     */
+    awaitMessage<T extends TransferringType>(
+        channelClass: { channel(): string; new (...data: any[]): T },
+        predicate: (message: T) => boolean
+    ) {
+        return new Promise((resolve, reject) => {
+            this.awaiters.push({
+                channel: channelClass.channel(),
+                predicate: predicate as unknown as (data: Sendable) => boolean,
+                resolve: resolve,
+            })
+        })
+    }
+
+    protected listeners: Map<string, Set<(data: TransferringType) => void>> =
+        new Map()
+
+    protected awaiters: Array<Awaiter> = []
+
+    protected registry: Registry<
+        TransferringType,
+        TypeCheckingLayers,
+        CustomData
+    >
+}
+
+/**
+ * A class to provide the common implementation details for classes managing communication using this API
+ *
+ * HOW TO IMPLEMENT:
+ * You must call `this.onData` whenever the implementor received data from the other end of the connection
+ *
+ * You must call `this.ready` when the connection becomes open and you're ready to transmit data
+ *
+ * `encode` & `decode` only need to faithfully encode and decode the data given to it, everything else is handled by the ListenerManager class.
+ * For example, if the `IOType` is json encoded text, just using `JSON.parse` & `JSON.stringify` would work just fine
+ *
+ * `finalize` is passed in the type checkers, and is responsible for type checking the data given to it wherever it needs to.
+ * It must also faithfully convert the `IntermediateType` to the `TransferringType`.
+ * Prototype changes are handled automatically
+ * For example, if the IOType is JSON encoded text, and the IntermediateType is the return value of JSON.parse, then simply running the type checkers, throwing an error if they fail, and returning the same value is good enough.
+ *
+ * @typeParam `TransferringType` The data type that users of the implementing manager would receive and send
+ * @typeParam `IntermediateType` The type that `decode` will decode to, and that `finalize` will convert from.
+ * This is useful for being able to get a channel out of data, without decoding the data to it's final state.
+ * That's useful for type checking data to make sure it *can* be decoded to it's final state before it is.
+ * @typeParam `IOType` The data type that this manager converts `TransferringType` to and from, and is what's sent over the network
+ * @typeParam `TypeCheckingLayers` Defines the type checkers that the `finalize` method should expect to take in
+ * @typeParam `CustomData` Defines what custom data the `finalize` method should take in, this data is given when the class uses the {@link MakeSendableWithData} decorator
+ * Typically used for extra class specific decoding if neccesary, but it can be used for anything. Undefined by default
+ */
+export abstract class AbstractListenerManager<
+        TransferringType extends Sendable,
+        IntermediateType,
+        IOType,
+        TypeCheckingLayers extends Array<(data: any) => boolean> = [
+            (data: any) => boolean
+        ],
+        CustomData = undefined
+    >
+    extends ListenerManagerImplementations<
+        TransferringType,
+        TypeCheckingLayers,
+        CustomData
+    >
+    implements ListenerManager<TransferringType>
+{
+    constructor(
+        registry: Registry<TransferringType, TypeCheckingLayers, CustomData>
+    ) {
+        super(registry)
+    }
+
+    /**
+     * Implementors must call this function when they receive data from the other end of the network
+     * @param data The data received
+     */
+    protected onData(data: IOType) {
+        let intermediate: IntermediateType
+        let channel: any
+
+        try {
+            ;[channel, intermediate] = this.decode(data)
+        } catch (e) {
+            console.warn(
+                `Dropped message because decoder threw an error: \n ${e} \n\n ${data}`
+            )
+            return
+        }
+
+        if (typeof channel !== "string") {
+            console.warn(
+                `Dropped message since \`channel\` is not a string: \n ${intermediate} \n\n ${data}`
+            )
+
+            return
+        }
+
+        if (!this.registry.entries.has(channel)) {
+            console.warn(
+                `Dropped message because it's channel (${channel}) isn't included in the registry (did you remember to use @MakeSendable on it?): \n ${intermediate} \n\n ${data}`
+            )
+
+            return
+        }
+
+        const [classType, strats, customData] =
+            this.registry.entries.get(channel)!
+
+        let decoded: TransferringType
+
+        try {
+            decoded = this.finalize(intermediate, strats, customData)
+        } catch (e) {
+            console.warn(
+                `Dropped message because converting to the TransferringType failed: ${e}: \n ${intermediate} \n\n ${data}`
+            )
+
+            return
+        }
+
+        Object.setPrototypeOf(intermediate, classType.prototype)
+
+        this.notifyListeners(decoded)
+    }
+
+    /**
      * Send data to the other side of the network
      * @param data The data to send
      */
@@ -236,30 +303,6 @@ export abstract class AbstractListenerManager<
         }
 
         this.transmit(encoded)
-    }
-
-    /**
-     * Returns a promise that gets resolved when message of the expected class gets received, allowing you to await messages from the other side of the connection
-     *
-     * Only one awaiter can receive a message
-     * The priority of who gets what is decided by who called awaitMessage first
-     * A message can't trigger listeners if it's captured by a call of awaitMessage
-     *
-     * @param channelClass The class representing the data you want to await
-     * @param predicate Decides whether you want the promise to get resolved for the given channelClass
-     * @returns A promise that gets resolved when a message comes in that matches the channelClass and predicate
-     */
-    awaitMessage<T extends TransferringType>(
-        channelClass: { channel(): string; new (...data: any[]): T },
-        predicate: (message: T) => boolean
-    ) {
-        return new Promise((resolve, reject) => {
-            this.awaiters.push({
-                channel: channelClass.channel(),
-                predicate: predicate as unknown as (data: Sendable) => boolean,
-                resolve: resolve,
-            })
-        })
     }
 
     private queue: Array<TransferringType> = []
@@ -301,13 +344,119 @@ export abstract class AbstractListenerManager<
         typeCheckingLayers: TypeCheckingLayers,
         customData: CustomData
     ): TransferringType
+}
 
-    private listeners: Map<string, Set<(data: TransferringType) => void>> =
-        new Map()
+/**
+ * A class to provide the common implementation details for classes managing communication using this API
+ * This class encodes data in JSON.
+ * If you want to use a different encoder, extend {@link AbstractListenerManager} instead
+ * If you don't want an encoder at all, extends {@link InternalListenerManager} instead
+ *
+ * HOW TO IMPLEMENT:
+ * You must call `this.onData` whenever the implementor received data from the other end of the connection
+ *
+ * You must call `this.ready` when the connection becomes open and you're ready to transmit data
+ *
+ * `transmit` must send the encoded data to the other side of the connection
+ */
+export abstract class JSONListenerManager extends AbstractListenerManager<
+    Sendable,
+    object,
+    string,
+    [(data: any) => boolean]
+> {
+    protected encode(data: Sendable) {
+        return JSON.stringify(data)
+    }
 
-    private awaiters: Array<Awaiter> = []
+    protected decode(data: string): [any, object] {
+        const decoded = JSON.parse(data)
 
-    private registry: Registry<TransferringType, TypeCheckingLayers, CustomData>
+        return [decoded.channel, decoded]
+    }
+
+    protected finalize(
+        data: object,
+        typeCheckingLayers: [(data: any) => boolean]
+    ) {
+        if (!typeCheckingLayers[0](data)) {
+            throw new Error("Type checking failed")
+        }
+
+        return data as Sendable
+    }
+}
+
+export abstract class InternalListenerManager<
+        TypeCheckingLayers extends ((data: any) => boolean)[] = []
+    >
+    extends ListenerManagerImplementations<Sendable, TypeCheckingLayers>
+    implements ListenerManager<Sendable>
+{
+    constructor(registry: Registry<Sendable, TypeCheckingLayers>) {
+        super(registry)
+    }
+
+    /**
+     * Implementors must call this function when they receive data from the other end of the network
+     * @param data The data received
+     */
+    protected onData(data: Sendable) {
+        let channel: any = data.channel
+
+        if (!this.registry.entries.has(channel)) {
+            console.warn(
+                `Dropped message because it's channel (${channel}) isn't included in the registry (did you remember to use @MakeSendable on it?):\n ${data}`
+            )
+
+            return
+        }
+
+        this.notifyListeners(data)
+    }
+
+    /**
+     * Send data to the other side of the network
+     * @param data The data to send
+     */
+    send<T extends Sendable>(data: T) {
+        if (!this.registry.entries.has(data.channel!)) {
+            throw new Error(
+                "The class being sent isn't registered in the registry, did you remember to use @MakeSendable on it?"
+            )
+        }
+
+        if (!this.isReady) {
+            this.queue.push(data)
+            return
+        }
+
+        data.channel = Object.getPrototypeOf(data).channel
+
+        this.transmit(data)
+    }
+
+    private queue: Array<Sendable> = []
+    private isReady = false
+
+    /**
+     * Implementors must call this when the listener manager is ready to transmit data
+     *
+     * Before this is called, messages send by `send` are queued so they won't cause errors
+     */
+    protected ready() {
+        this.isReady = true
+
+        this.queue.forEach(v => this.send(v))
+
+        this.queue = []
+    }
+
+    /**
+     * Transmit data to the other side of the network connection
+     * @param data The data to transmit
+     */
+    protected abstract transmit(data: Sendable): void
 }
 
 export type TypeCheckingStrategies<T extends Sendable> = Omit<

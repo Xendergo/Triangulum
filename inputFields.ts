@@ -1,6 +1,6 @@
 import { strats } from "./defaultStrategies"
 import type { Registry } from "./registry"
-import { MakeSendable, Sendable } from "."
+import { MakeSendable, Sendable } from "./index"
 
 /**
  * The names of the types allowed to be sent via an {@link InputFields} instance

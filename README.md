@@ -23,22 +23,12 @@ The `strats` object tries to make writing type checkers for all kinds of data as
 Here's an example using websockets:
 
 ```typescript
-import {
-    Sendable,
-    AbstractListenerManager,
-    MakeSendable,
-    strats,
-} from "triangulum"
+import { Sendable, JSONListenerManager, MakeSendable, strats } from "triangulum"
 
 // Create the registry that will be used to store all types that can be sent
 const websiteRegistry = new Registry<Sendable, [(data: any) => boolean]>()
 
-class ClientConnectionManager extends AbstractListenerManager<
-    Sendable, // The class that all data being sent through must extend, making this something other than `Sendable` would be good for requiring that classes include certain methods
-    object, // The data type that `decode` decodes to
-    string, // The data type that `encode` encodes to, and is what should be given to `transmit`
-    [(data: any) => boolean] // The data type expected from each class's type checkers
-> {
+class ClientConnectionManager extends JSONListenerManager {
     constructor() {
         super(websiteRegistry)
 
@@ -58,30 +48,9 @@ class ClientConnectionManager extends AbstractListenerManager<
         }
     }
 
-    // Defines how to encode the data being sent
-    encode(dataObj: Sendable) {
-        return JSON.stringify(dataObj)
-    }
-
-    // Defines how to decode data being received, must also give the channel
-    decode(data: string): [string, object] {
-        const parsed = JSON.parse(data)
-
-        return [parsed.channel, parsed]
-    }
-
     // Defines how the data should be sent
     transmit(data: string) {
         this.ws.send(data)
-    }
-
-    // Defines how to do type checking, as well as doing extra decoding if neccesary
-    finalize(data: object, typeCheckers: [(data: any) => boolean]) {
-        if (!typeCheckers[0](data)) {
-            throw new Error("Type checking failed")
-        }
-
-        return data as Sendable
     }
 
     ws
