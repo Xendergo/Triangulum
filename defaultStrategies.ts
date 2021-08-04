@@ -123,7 +123,7 @@ class Strategies {
                 return false
             }
 
-            for (const v in data) {
+            for (const v of data) {
                 if (!strat(v)) {
                     return false
                 }

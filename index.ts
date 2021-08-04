@@ -387,6 +387,18 @@ export abstract class JSONListenerManager extends AbstractListenerManager<
     }
 }
 
+/**
+ * A class to provide the common implementation details for classes managing communication using this API
+ * This class doesn't encode data at all, and uses the transmitting type as the IO type
+ * This is helpful for dealing with web workers, or sending notifications about internal state changes
+ *
+ * HOW TO IMPLEMENT:
+ * You must call `this.onData` whenever the implementor received data from the other end of the connection
+ *
+ * You must call `this.ready` when the connection becomes open and you're ready to transmit data
+ *
+ * `transmit` must send the encoded data to the other side of the connection
+ */
 export abstract class InternalListenerManager<
         TypeCheckingLayers extends ((data: any) => boolean)[] = []
     >

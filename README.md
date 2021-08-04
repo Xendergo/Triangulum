@@ -1,10 +1,10 @@
 # Triangulum
 
-Triangulum is a lightweight, reactive, typescript API that makes the transfer of data as easy as possible by abstracting receiving and sending json strings over websockets or HTTP, buffers over TCP, or anything else you can encode and decode data from, into sending and receiving class instances via listeners.
+Triangulum is a lightweight, reactive, typescript API that makes the transfer of data as easy as possible by removing the need to manually decode and send data to where it's needed in your application.
 
 ## How it works
 
-Triangulum uses some simple ideas to make it as flexible as possible
+Triangulum uses some simple concepts to make it as flexible as possible
 
 A `Registry` is a class that stores the prototypes of various classes, so object's prototypes can be changed to that of the target class.
 It also stores the channel of each class. The channel is used to differentiate different incoming data types.
@@ -37,18 +37,18 @@ class ClientConnectionManager extends JSONListenerManager {
         this.ws.onmessage = e => {
             if (!(typeof e.data === "string")) return
 
-            // Tell the AbstractListenerManager that some data has been received
+            // Tell the JSONListenerManager that some data has been received
             this.onData(e.data as string)
         }
 
         this.ws.onopen = e => {
             // Tell the AbstractListenerManager that this instance is ready to send messages
-            // This is neccessary because the parent class caches messages to allow for instantiating the class and sending stuff immediately
+            // This is neccessary because the parent class caches messages to allow for instantiating the class and sending stuff immediately after
             this.ready()
         }
     }
 
-    // Defines how the data should be sent
+    // Defines how the data should be sent over the network
     transmit(data: string) {
         this.ws.send(data)
     }
@@ -60,7 +60,7 @@ const clientConnectionManager = new ClientConnectionManager()
 
 // @MakeSendable registers the class to the registry, it takes the channel the class should be sent through, as well as how the data should be type checked.
 @MakeSendable(websiteRegistry, "Thingy", [
-    // The strats object contains helper methods to make writing these type checkers easier.
+    // The strats object contains helper methods to make writing type checkers easier.
     strats.each({
         value: strats.string,
     }),
