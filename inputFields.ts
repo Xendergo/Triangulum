@@ -12,6 +12,13 @@ type AllowedInputFieldTypesNames = "string" | "bool" | "number"
  */
 type InputFieldOptionsGeneric<T extends AllowedInputFieldTypesNames> = {
     type: T
+    default?: T extends "string"
+        ? string | null
+        : T extends "bool"
+        ? boolean
+        : T extends "number"
+        ? number | null
+        : never
 }
 
 /**
