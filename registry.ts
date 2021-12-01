@@ -1,15 +1,9 @@
 import type { Sendable } from "./index"
 
-export class Registry<
-    T extends Sendable,
-    TypeCheckingLayers extends Array<(data: any) => boolean> = [
-        (data: any) => boolean
-    ],
-    CustomData = undefined
-> {
+export class Registry<T extends Sendable, CustomData = undefined> {
     entries: Map<
         string,
-        [{ prototype: object }, TypeCheckingLayers, CustomData]
+        [{ prototype: object }, (data: any) => boolean, CustomData]
     > = new Map()
 
     /**
@@ -22,7 +16,7 @@ export class Registry<
      */
     register(
         classToRegister: { new (...values: any[]): T; channel(): string },
-        strats: TypeCheckingLayers,
+        strats: (data: any) => boolean,
         customData: CustomData
     ) {
         const channel = classToRegister.channel()

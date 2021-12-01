@@ -32,7 +32,7 @@ class Strategies {
      * @returns A function representing any the strategies inputted being true
      * @typeParam `T` - The type you're checking for
      */
-    any<T>(...strats: ((data: any) => boolean)[]) {
+    anyOf<T>(...strats: ((data: any) => boolean)[]) {
         return function (data: any): data is T {
             for (const strat of strats) {
                 if (strat(data)) {
@@ -50,7 +50,7 @@ class Strategies {
      * @returns A function representing a strategy for checking the object type
      * @typeParam `T` - The object type you're checking for
      */
-    each<T extends { [key: string]: any }>(strats: EachType<T>) {
+    class<T extends { [key: string]: any }>(strats: EachType<T>) {
         return function (data: any): data is T {
             for (const key in strats) {
                 let value
@@ -76,7 +76,7 @@ class Strategies {
      * @returns A strategy for type checking the tuple type
      * @typeParam `T` - The tuple type you're checking for
      */
-    tupleEach<T extends Array<any>>(strats: EachType<T>) {
+    tuple<T extends Array<any>>(strats: EachType<T>) {
         return function (data: any): data is T {
             if (!Array.isArray(data) || data.length !== strats.length) {
                 return false
@@ -188,21 +188,21 @@ class Strategies {
      * @returns A strategy ensuring type T doesn't exist
      * @typeParam `T` - The type you're checking for
      */
-    isPrototype<T>() {
+    doesntExist<T>() {
         return function (data: any): data is T {
             return data === undefined
         }
     }
 
     /**
-     * Trust that a value is always the correct type, good for saving effort type checking stuff when there's no network or untrusted actors to mess up data
+     * Don't type check a value, good for saving effort type checking stuff when there's no network or untrusted actors to mess up data, or when the contents of the data doesn't matter
      *
      * Can also be used on the `channel` property for {@link Sendable}, since it's type checked by the library itself
      *
      * @returns A strategy always returning true
      * @typeParam `T` - The type you're checking for
      */
-    trust<T>() {
+    dontCheck<T>() {
         return function (data: any): data is T {
             return true
         }
@@ -215,7 +215,7 @@ class Strategies {
      * @returns A strategy checking the type and applying the filter
      * @typeParam `T` - The type you're checking for
      */
-    and<T>(strat: strat<T>, filter: (data: T) => boolean) {
+    checkWithFilter<T>(strat: strat<T>, filter: (data: T) => boolean) {
         return function (data: any): data is T {
             return strat(data) && filter(data)
         }
@@ -252,63 +252,63 @@ class Strategies {
     /**
      * A strategy checking if the value is a number
      */
-    number(data: any): data is number {
+    isNumber(data: any): data is number {
         return typeof data === "number"
     }
 
     /**
      * A strategy checking if the value is a string
      */
-    string(data: any): data is string {
+    isString(data: any): data is string {
         return typeof data === "string"
     }
 
     /**
      * A strategy checking if the value is a boolean
      */
-    boolean(data: any): data is boolean {
+    isBoolean(data: any): data is boolean {
         return typeof data === "boolean"
     }
 
     /**
      * A strategy checking if the value is a bigint
      */
-    bigint(data: any): data is bigint {
+    isBigint(data: any): data is bigint {
         return typeof data === "bigint"
     }
 
     /**
      * A strategy checking if the value is a symbol
      */
-    symbol(data: any): data is symbol {
+    isSymbol(data: any): data is symbol {
         return typeof data === "symbol"
     }
 
     /**
      * A strategy checking if the value is a function
      */
-    function(data: any): data is Function {
+    isFunction(data: any): data is Function {
         return typeof data === "function"
     }
 
     /**
      * A strategy checking if the value is an object
      */
-    object(data: any): data is object {
+    isObject(data: any): data is object {
         return typeof data === "object"
     }
 
     /**
      * A strategy checking if the value is null
      */
-    null(data: any): data is null {
+    isNull(data: any): data is null {
         return data === null
     }
 
     /**
      * A strategy checking if the value is undefined
      */
-    undefined(data: any): data is undefined {
+    isUndefined(data: any): data is undefined {
         return data === undefined
     }
 }

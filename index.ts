@@ -80,14 +80,9 @@ export interface ListenerManager<TransferringType extends Sendable> {
  */
 export abstract class ListenerManagerImplementations<
     TransferringType extends Sendable,
-    TypeCheckingLayers extends Array<(data: any) => boolean> = [
-        (data: any) => boolean
-    ],
     CustomData = undefined
 > {
-    constructor(
-        registry: Registry<TransferringType, TypeCheckingLayers, CustomData>
-    ) {
+    constructor(registry: Registry<TransferringType, CustomData>) {
         this.registry = registry
     }
 
@@ -169,11 +164,7 @@ export abstract class ListenerManagerImplementations<
 
     protected awaiters: Array<Awaiter> = []
 
-    protected registry: Registry<
-        TransferringType,
-        TypeCheckingLayers,
-        CustomData
-    >
+    protected registry: Registry<TransferringType, CustomData>
 }
 
 /**
@@ -205,21 +196,12 @@ export abstract class AbstractListenerManager<
         TransferringType extends Sendable,
         IntermediateType,
         IOType,
-        TypeCheckingLayers extends Array<(data: any) => boolean> = [
-            (data: any) => boolean
-        ],
         CustomData = undefined
     >
-    extends ListenerManagerImplementations<
-        TransferringType,
-        TypeCheckingLayers,
-        CustomData
-    >
+    extends ListenerManagerImplementations<TransferringType, CustomData>
     implements ListenerManager<TransferringType>
 {
-    constructor(
-        registry: Registry<TransferringType, TypeCheckingLayers, CustomData>
-    ) {
+    constructor(registry: Registry<TransferringType, CustomData>) {
         super(registry)
     }
 
@@ -341,7 +323,7 @@ export abstract class AbstractListenerManager<
 
     protected abstract finalize(
         data: IntermediateType,
-        typeCheckingLayers: TypeCheckingLayers,
+        typeCheckingLayers: (data: any) => boolean,
         customData: CustomData
     ): TransferringType
 }
@@ -362,8 +344,7 @@ export abstract class AbstractListenerManager<
 export abstract class JSONListenerManager extends AbstractListenerManager<
     Sendable,
     object,
-    string,
-    [(data: any) => boolean]
+    string
 > {
     protected encode(data: Sendable) {
         return JSON.stringify(data)
@@ -377,9 +358,9 @@ export abstract class JSONListenerManager extends AbstractListenerManager<
 
     protected finalize(
         data: object,
-        typeCheckingLayers: [(data: any) => boolean]
+        typeCheckingLayers: (data: any) => boolean
     ) {
-        if (!typeCheckingLayers[0](data)) {
+        if (!typeCheckingLayers(data)) {
             throw new Error("Type checking failed")
         }
 
@@ -481,27 +462,26 @@ export type TypeCheckingStrategies<T extends Sendable> = Omit<
 /**
  * A decorator to make a class sendable via websockets
  * @param channel The channel this class should be sent through
- * @param strategies An object of strategies for type checking the values sent representing this class, in case someone sends invalid information to the server
+ * @param strategies The strategy for type checking the values sent representing this class, in case someone sends invalid information to the server
  */
 export function MakeSendable<
     T extends Sendable,
     TypeCheckingLayers extends Array<(data: any) => boolean>
 >(
-    registry: Registry<T, TypeCheckingLayers, undefined>,
+    registry: Registry<T, undefined>,
     channel: string,
-    strategies: TypeCheckingLayers
+    strategies: (data: any) => boolean
 ) {
     return MakeSendableWithData(registry, channel, strategies, undefined)
 }
 
 export function MakeSendableWithData<
     T extends Sendable,
-    TypeCheckingLayers extends Array<(data: any) => boolean>,
     CustomData = undefined
 >(
-    registry: Registry<T, TypeCheckingLayers, CustomData>,
+    registry: Registry<T, CustomData>,
     channel: string,
-    strategies: TypeCheckingLayers,
+    strategies: (data: any) => boolean,
     customData: CustomData
 ) {
     return (constructor: { new (...args: any[]): T; channel(): string }) => {
