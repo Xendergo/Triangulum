@@ -1,6 +1,6 @@
 import type { Sendable } from "./index"
 
-export class Registry<T extends Sendable, CustomData = undefined> {
+export class Registry<T extends Sendable, CustomData extends Array<any> = []> {
     entries: Map<
         string,
         [{ prototype: object }, (data: any) => boolean, CustomData]

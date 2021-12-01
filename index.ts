@@ -80,7 +80,7 @@ export interface ListenerManager<TransferringType extends Sendable> {
  */
 export abstract class ListenerManagerImplementations<
     TransferringType extends Sendable,
-    CustomData = undefined
+    CustomData extends Array<any> = []
 > {
     constructor(registry: Registry<TransferringType, CustomData>) {
         this.registry = registry
@@ -195,7 +195,7 @@ export abstract class AbstractListenerManager<
         TransferringType extends Sendable,
         IntermediateType,
         IOType,
-        CustomData = undefined
+        CustomData extends Array<any> = []
     >
     extends ListenerManagerImplementations<TransferringType, CustomData>
     implements ListenerManager<TransferringType>
@@ -243,7 +243,7 @@ export abstract class AbstractListenerManager<
         let decoded: TransferringType
 
         try {
-            decoded = this.finalize(intermediate, strats, customData)
+            decoded = this.finalize(intermediate, strats, ...customData)
         } catch (e) {
             console.warn(
                 `Dropped message because converting to the TransferringType failed: ${e}: \n ${intermediate} \n\n ${data}`
@@ -330,7 +330,7 @@ export abstract class AbstractListenerManager<
     protected abstract finalize(
         data: IntermediateType,
         typeChecker: (data: any) => boolean,
-        customData: CustomData
+        ...customData: CustomData
     ): TransferringType
 }
 
@@ -384,15 +384,13 @@ export abstract class JSONListenerManager extends AbstractListenerManager<
  *
  * You must call `this.ready` when the connection becomes open and you're ready to transmit data
  *
- * `transmit` must send the encoded data to the other side of the connection
+ * `transmit` must send the data to the other side of the connection
  */
-export abstract class InternalListenerManager<
-        TypeCheckingLayers extends ((data: any) => boolean)[] = []
-    >
-    extends ListenerManagerImplementations<Sendable, TypeCheckingLayers>
+export abstract class InternalListenerManager
+    extends ListenerManagerImplementations<Sendable>
     implements ListenerManager<Sendable>
 {
-    constructor(registry: Registry<Sendable, TypeCheckingLayers>) {
+    constructor(registry: Registry<Sendable>) {
         super(registry)
     }
 
@@ -458,42 +456,21 @@ export abstract class InternalListenerManager<
     protected abstract transmit(data: Sendable): void
 }
 
-export type TypeCheckingStrategies<T extends Sendable> = Omit<
-    {
-        [Property in keyof T]-?: (data: any) => data is T[Property]
-    },
-    "channel"
->
-
 /**
  * A decorator to make a class sendable via a ListenerManager
  * @param registry The registry to put this class in
  * @param channel The channel this class should be sent through
  * @param strategy The strategy for type checking the values sent representing this class, in case someone sends invalid information to the server
- */
-export function MakeSendable<T extends Sendable>(
-    registry: Registry<T, undefined>,
-    channel: string,
-    strategy: (data: any) => boolean
-) {
-    return MakeSendableWithData(registry, channel, strategy, undefined)
-}
-
-/**
- * A decorator to make a class sendable via a ListenerManager while giving the decoder some custom data
- * @param registry The registry to put this class in
- * @param channel The channel this class should be sent through
- * @param strategy The strategy for type checking the values sent representing this class, in case someone sends invalid information to the server
  * @param customData The custom data to give to the decoder
  */
-export function MakeSendableWithData<
+export function MakeSendable<
     T extends Sendable,
-    CustomData = undefined
+    CustomData extends Array<any> = []
 >(
     registry: Registry<T, CustomData>,
     channel: string,
     strategy: (data: any) => boolean,
-    customData: CustomData
+    ...customData: CustomData
 ) {
     return (constructor: { new (...args: any[]): T; channel(): string }) => {
         constructor.prototype.channel = channel
@@ -507,37 +484,21 @@ export function MakeSendableWithData<
  * @param registry The registry to put classes in
  * @returns A decorator that can be used in the same way as {@link MakeSendable}
  */
-export function makeCustomMakeSendable<T extends Sendable>(
-    registry: Registry<T, undefined>
-): <S extends T>(
-    channel: string,
-    strategy: (data: any) => boolean
-) => (constructor: { new (...args: any[]): S; channel(): string }) => void {
-    return (channel: string, strategy: (data: any) => boolean) => {
-        return MakeSendable(registry, channel, strategy)
-    }
-}
-
-/**
- * A factory that makes a decorator that acts like {@link MakeSendableWithData} but without having to include the registry every time
- * @param registry The registry to put classes in
- * @returns A decorator that can be used in the same way as {@link MakeSendableWithData}
- */
-export function makeCustomMakeSendableWithData<
+export function makeCustomSendableDecorator<
     T extends Sendable,
-    CustomData = undefined
+    CustomData extends Array<any> = []
 >(
-    registry: Registry<T, undefined>
+    registry: Registry<T, CustomData>
 ): <S extends T>(
     channel: string,
     strategy: (data: any) => boolean,
-    data: CustomData
+    ...data: CustomData
 ) => (constructor: { new (...args: any[]): S; channel(): string }) => void {
     return (
         channel: string,
         strategy: (data: any) => boolean,
-        data: CustomData
+        ...data: CustomData
     ) => {
-        return MakeSendableWithData(registry, channel, strategy, data)
+        return MakeSendable(registry, channel, strategy, ...data)
     }
 }
