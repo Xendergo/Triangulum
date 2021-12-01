@@ -170,7 +170,7 @@ export abstract class ListenerManagerImplementations<
 /**
  * A class to provide the common implementation details for classes managing communication using this API
  *
- * HOW TO IMPLEMENT:
+ * ### HOW TO IMPLEMENT:
  * You must call `this.onData` whenever the implementor received data from the other end of the connection
  *
  * You must call `this.ready` when the connection becomes open and you're ready to transmit data
@@ -178,7 +178,7 @@ export abstract class ListenerManagerImplementations<
  * `encode` & `decode` only need to faithfully encode and decode the data given to it, everything else is handled by the ListenerManager class.
  * For example, if the `IOType` is json encoded text, just using `JSON.parse` & `JSON.stringify` would work just fine
  *
- * `finalize` is passed in the type checkers, and is responsible for type checking the data given to it wherever it needs to.
+ * `finalize` is passed in the type checker, and is responsible for type checking the data given to it.
  * It must also faithfully convert the `IntermediateType` to the `TransferringType`.
  * Prototype changes are handled automatically
  * For example, if the IOType is JSON encoded text, and the IntermediateType is the return value of JSON.parse, then simply running the type checkers, throwing an error if they fail, and returning the same value is good enough.
@@ -188,7 +188,6 @@ export abstract class ListenerManagerImplementations<
  * This is useful for being able to get a channel out of data, without decoding the data to it's final state.
  * That's useful for type checking data to make sure it *can* be decoded to it's final state before it is.
  * @typeParam `IOType` The data type that this manager converts `TransferringType` to and from, and is what's sent over the network
- * @typeParam `TypeCheckingLayers` Defines the type checkers that the `finalize` method should expect to take in
  * @typeParam `CustomData` Defines what custom data the `finalize` method should take in, this data is given when the class uses the {@link MakeSendableWithData} decorator
  * Typically used for extra class specific decoding if neccesary, but it can be used for anything. Undefined by default
  */
@@ -312,6 +311,7 @@ export abstract class AbstractListenerManager<
     /**
      * Decode data from the `IOType` to the `IntermediateType`
      * @param data The data to decode
+     * @returns A tuple where the first value is the channel, and the second value is the decoded type
      */
     protected abstract decode(data: IOType): [any, IntermediateType]
 
@@ -321,9 +321,15 @@ export abstract class AbstractListenerManager<
      */
     protected abstract transmit(data: IOType): void
 
+    /**
+     * Type check and do final conversions for your `IntermediateType`
+     * @param data The data returned from `decode`
+     * @param typeChecker The predicate to ensure the data is the type expected, you're responsible for calling this
+     * @param customData Any custom data provided when using {@link MakeSendableWithData}
+     */
     protected abstract finalize(
         data: IntermediateType,
-        typeCheckingLayers: (data: any) => boolean,
+        typeChecker: (data: any) => boolean,
         customData: CustomData
     ): TransferringType
 }
@@ -460,33 +466,78 @@ export type TypeCheckingStrategies<T extends Sendable> = Omit<
 >
 
 /**
- * A decorator to make a class sendable via websockets
+ * A decorator to make a class sendable via a ListenerManager
+ * @param registry The registry to put this class in
  * @param channel The channel this class should be sent through
- * @param strategies The strategy for type checking the values sent representing this class, in case someone sends invalid information to the server
+ * @param strategy The strategy for type checking the values sent representing this class, in case someone sends invalid information to the server
  */
-export function MakeSendable<
-    T extends Sendable,
-    TypeCheckingLayers extends Array<(data: any) => boolean>
->(
+export function MakeSendable<T extends Sendable>(
     registry: Registry<T, undefined>,
     channel: string,
-    strategies: (data: any) => boolean
+    strategy: (data: any) => boolean
 ) {
-    return MakeSendableWithData(registry, channel, strategies, undefined)
+    return MakeSendableWithData(registry, channel, strategy, undefined)
 }
 
+/**
+ * A decorator to make a class sendable via a ListenerManager while giving the decoder some custom data
+ * @param registry The registry to put this class in
+ * @param channel The channel this class should be sent through
+ * @param strategy The strategy for type checking the values sent representing this class, in case someone sends invalid information to the server
+ * @param customData The custom data to give to the decoder
+ */
 export function MakeSendableWithData<
     T extends Sendable,
     CustomData = undefined
 >(
     registry: Registry<T, CustomData>,
     channel: string,
-    strategies: (data: any) => boolean,
+    strategy: (data: any) => boolean,
     customData: CustomData
 ) {
     return (constructor: { new (...args: any[]): T; channel(): string }) => {
         constructor.prototype.channel = channel
 
-        registry.register(constructor, strategies, customData)
+        registry.register(constructor, strategy, customData)
+    }
+}
+
+/**
+ * A factory that makes a decorator that acts like {@link MakeSendable} but without having to include the registry every time
+ * @param registry The registry to put classes in
+ * @returns A decorator that can be used in the same way as {@link MakeSendable}
+ */
+export function makeCustomMakeSendable<T extends Sendable>(
+    registry: Registry<T, undefined>
+): <S extends T>(
+    channel: string,
+    strategy: (data: any) => boolean
+) => (constructor: { new (...args: any[]): S; channel(): string }) => void {
+    return (channel: string, strategy: (data: any) => boolean) => {
+        return MakeSendable(registry, channel, strategy)
+    }
+}
+
+/**
+ * A factory that makes a decorator that acts like {@link MakeSendableWithData} but without having to include the registry every time
+ * @param registry The registry to put classes in
+ * @returns A decorator that can be used in the same way as {@link MakeSendableWithData}
+ */
+export function makeCustomMakeSendableWithData<
+    T extends Sendable,
+    CustomData = undefined
+>(
+    registry: Registry<T, undefined>
+): <S extends T>(
+    channel: string,
+    strategy: (data: any) => boolean,
+    data: CustomData
+) => (constructor: { new (...args: any[]): S; channel(): string }) => void {
+    return (
+        channel: string,
+        strategy: (data: any) => boolean,
+        data: CustomData
+    ) => {
+        return MakeSendableWithData(registry, channel, strategy, data)
     }
 }
